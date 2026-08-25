@@ -14,52 +14,16 @@ Validates Phase 7 and Phase 8 implementations:
 """
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from fastapi.testclient import TestClient
-from app.main import app
-from app.database import Base, get_db
 from app.models.user import User
 from app.core.security import hash_password
 from app.core.dependencies import get_current_admin_user
-from fastapi import Depends
-
-
-# Setup isolated in-memory test database using StaticPool for multi-threaded SQLite safety
-test_engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
-
-
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def setup_and_teardown_db():
-    """Ensure a clean database schema before each test."""
-    Base.metadata.create_all(bind=test_engine)
-    yield
-    Base.metadata.drop_all(bind=test_engine)
 
 
 # ------------------------------------------------------------------------------
 # 1-4: Registration Tests
 # ------------------------------------------------------------------------------
 
-def test_register_new_user_success():
+def test_register_new_user_success(client):
     """1. Test successful user registration."""
     payload = {
         "name": "Jane Safe",
@@ -79,7 +43,7 @@ def test_register_new_user_success():
     assert "password_hash" not in data
 
 
-def test_register_duplicate_email():
+def test_register_duplicate_email(client):
     """2. Test registration rejection on duplicate email (409 Conflict)."""
     payload = {
         "name": "First User",
@@ -95,7 +59,7 @@ def test_register_duplicate_email():
     assert "already exists" in res2.json()["detail"].lower()
 
 
-def test_register_invalid_input_validation():
+def test_register_invalid_input_validation(client):
     """3 & 4. Test validation failure on missing fields or short passwords (422)."""
     # Missing email & name
     res1 = client.post("/api/auth/register", json={"password": "short"})
@@ -114,7 +78,7 @@ def test_register_invalid_input_validation():
 # 5-7: Login Tests
 # ------------------------------------------------------------------------------
 
-def test_login_correct_credentials():
+def test_login_correct_credentials(client):
     """5. Test login with correct credentials returns valid JWT token."""
     # Register user first
     client.post("/api/auth/register", json={
@@ -135,7 +99,7 @@ def test_login_correct_credentials():
     assert len(data["access_token"]) > 20
 
 
-def test_login_wrong_password():
+def test_login_wrong_password(client):
     """6. Test login rejection with wrong password (401)."""
     client.post("/api/auth/register", json={
         "name": "Wrong Pass User",
@@ -151,7 +115,7 @@ def test_login_wrong_password():
     assert "invalid email or password" in response.json()["detail"].lower()
 
 
-def test_login_non_existing_email():
+def test_login_non_existing_email(client):
     """7. Test login rejection with non-existing email (401)."""
     response = client.post("/api/auth/login", json={
         "email": "nonexistent@example.com",
@@ -164,13 +128,13 @@ def test_login_non_existing_email():
 # 8-10: Profile Access & Token Verification
 # ------------------------------------------------------------------------------
 
-def test_access_profile_without_token():
+def test_access_profile_without_token(client):
     """8. Test profile access rejection without token (401)."""
     response = client.get("/api/users/profile")
     assert response.status_code == 401
 
 
-def test_access_profile_with_valid_token():
+def test_access_profile_with_valid_token(client):
     """9. Test profile access with valid JWT token."""
     client.post("/api/auth/register", json={
         "name": "Token User",
@@ -198,7 +162,7 @@ def test_access_profile_with_valid_token():
     assert "password_hash" not in data
 
 
-def test_access_profile_with_invalid_token():
+def test_access_profile_with_invalid_token(client):
     """10. Test profile access rejection with invalid token (401)."""
     response = client.get(
         "/api/users/profile",
@@ -211,7 +175,7 @@ def test_access_profile_with_invalid_token():
 # 11-12: Profile Updates & Role Immutability
 # ------------------------------------------------------------------------------
 
-def test_update_own_profile():
+def test_update_own_profile(client):
     """11. Test updating allowed profile fields."""
     client.post("/api/auth/register", json={
         "name": "Original Name",
@@ -237,7 +201,7 @@ def test_update_own_profile():
     assert data["email"] == "update@example.com"
 
 
-def test_unauthorized_role_modification_attempt():
+def test_unauthorized_role_modification_attempt(client):
     """12. Test that users cannot escalate their role via profile update."""
     client.post("/api/auth/register", json={
         "name": "Standard User",
@@ -264,7 +228,7 @@ def test_unauthorized_role_modification_attempt():
 # 13-15: Password Change & Re-Authentication
 # ------------------------------------------------------------------------------
 
-def test_change_password_success_and_login_with_new_password():
+def test_change_password_success_and_login_with_new_password(client):
     """13 & 15. Test changing password with correct credentials and logging in."""
     client.post("/api/auth/register", json={
         "name": "Pass Change User",
@@ -304,7 +268,7 @@ def test_change_password_success_and_login_with_new_password():
     assert "access_token" in new_login.json()
 
 
-def test_change_password_wrong_current_password():
+def test_change_password_wrong_current_password(client):
     """14. Test password change rejection with incorrect current password."""
     client.post("/api/auth/register", json={
         "name": "User",
@@ -332,7 +296,7 @@ def test_change_password_wrong_current_password():
 # 16-18: Security, Role-Based Access Control, and Logout
 # ------------------------------------------------------------------------------
 
-def test_password_hash_never_exposed():
+def test_password_hash_never_exposed(client):
     """16. Verify password_hash is never exposed in registration, profile, or login."""
     reg = client.post("/api/auth/register", json={
         "name": "Sec Test",
@@ -352,45 +316,39 @@ def test_password_hash_never_exposed():
     assert "password_hash" not in profile.text
 
 
-def test_rbac_user_cannot_access_admin_dependency():
+def test_rbac_user_cannot_access_admin_dependency(db_session):
     """17 & 18. Verify USER cannot access admin dependency while ADMIN can."""
     # 1. Standard user
-    client.post("/api/auth/register", json={
-        "name": "Regular User",
-        "email": "regular@example.com",
-        "password": "Password123"
-    })
-    user_token = client.post("/api/auth/login", json={
-        "email": "regular@example.com",
-        "password": "Password123"
-    }).json()["access_token"]
+    user = User(
+        name="Regular User",
+        email="regular@example.com",
+        password_hash=hash_password("Password123"),
+        role="user"
+    )
+    db_session.add(user)
+    db_session.commit()
 
-    # Use dependency directly in test
-    user = TestingSessionLocal().query(User).filter_by(email="regular@example.com").first()
     with pytest.raises(Exception) as exc_info:
         import asyncio
         asyncio.run(get_current_admin_user(current_user=user))
     assert "administrator privileges required" in str(exc_info.value).lower()
 
     # 2. Admin user
-    db = TestingSessionLocal()
     admin_user = User(
         name="Chief Admin",
         email="chief.admin@sentra.local",
         password_hash=hash_password("AdminPass123"),
         role="admin"
     )
-    db.add(admin_user)
-    db.commit()
-    db.refresh(admin_user)
+    db_session.add(admin_user)
+    db_session.commit()
 
     import asyncio
     verified_admin = asyncio.run(get_current_admin_user(current_user=admin_user))
     assert verified_admin.role == "admin"
-    db.close()
 
 
-def test_logout_endpoint():
+def test_logout_endpoint(client):
     """Test POST /api/auth/logout with authenticated token."""
     client.post("/api/auth/register", json={
         "name": "Logout User",

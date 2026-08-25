@@ -24,6 +24,7 @@ from app.schemas.emergency_contact import (
     EmergencyContactCreate,
     EmergencyContactUpdate,
     EmergencyContactResponse,
+    EmergencyContactDeleteResponse,
 )
 from app.schemas.event import (
     EventBase,
@@ -67,6 +68,7 @@ __all__ = [
     "EmergencyContactCreate",
     "EmergencyContactUpdate",
     "EmergencyContactResponse",
+    "EmergencyContactDeleteResponse",
     "EventBase",
     "EventCreate",
     "EventUpdate",

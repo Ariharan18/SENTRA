@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import settings
 from app.routers.auth import router as auth_router
 from app.routers.users import router as users_router
+from app.routers.emergency_contacts import router as emergency_contacts_router
 
 
 def create_application() -> FastAPI:
@@ -122,6 +123,17 @@ def create_application() -> FastAPI:
         users_router,
         prefix=f"{settings.API_PREFIX}/users",
         tags=["Users"]
+    )
+    # Register Emergency Contacts at both /api/users/emergency-contacts and /api/emergency-contacts
+    application.include_router(
+        emergency_contacts_router,
+        prefix=f"{settings.API_PREFIX}/users/emergency-contacts",
+        tags=["Emergency Contacts"]
+    )
+    application.include_router(
+        emergency_contacts_router,
+        prefix=f"{settings.API_PREFIX}/emergency-contacts",
+        tags=["Emergency Contacts"]
     )
 
     return application
