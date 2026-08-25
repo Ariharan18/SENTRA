@@ -31,3 +31,13 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def init_db(target_engine=None):
+    """
+    Safely creates all database tables defined in SQLAlchemy models if they do not exist.
+    Non-destructive: will not drop tables or delete existing data.
+    """
+    import app.models  # noqa: F401 - Register models with Base.metadata
+    active_engine = target_engine or engine
+    Base.metadata.create_all(bind=active_engine)
