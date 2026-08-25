@@ -12,6 +12,13 @@ from app.schemas.user import (
     UserResponse,
     TokenResponse,
 )
+from app.schemas.auth import (
+    RegisterRequest,
+    LoginRequest,
+    AuthResponse,
+    LogoutResponse,
+    MessageResponse,
+)
 from app.schemas.emergency_contact import (
     EmergencyContactBase,
     EmergencyContactCreate,
@@ -51,6 +58,11 @@ __all__ = [
     "UserPasswordUpdate",
     "UserResponse",
     "TokenResponse",
+    "RegisterRequest",
+    "LoginRequest",
+    "AuthResponse",
+    "LogoutResponse",
+    "MessageResponse",
     "EmergencyContactBase",
     "EmergencyContactCreate",
     "EmergencyContactUpdate",

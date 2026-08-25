@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import settings
+from app.routers.auth import router as auth_router
+from app.routers.users import router as users_router
 
 
 def create_application() -> FastAPI:
@@ -40,6 +42,7 @@ def create_application() -> FastAPI:
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
+            headers=getattr(exc, "headers", None)
         )
 
     @application.exception_handler(RequestValidationError)
@@ -108,6 +111,18 @@ def create_application() -> FastAPI:
             "version": settings.APP_VERSION,
             "environment": settings.ENVIRONMENT
         }
+
+    # Register API Routers
+    application.include_router(
+        auth_router,
+        prefix=f"{settings.API_PREFIX}/auth",
+        tags=["Authentication"]
+    )
+    application.include_router(
+        users_router,
+        prefix=f"{settings.API_PREFIX}/users",
+        tags=["Users"]
+    )
 
     return application
 
