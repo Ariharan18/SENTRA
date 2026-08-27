@@ -1,0 +1,25 @@
+.env
+.env.*
+!.env.example
+*.py[cod]
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+*.log
+uploads/
+exports/
+backups/
+*.sql
+.streamlit/secrets.toml
+
+# Local IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
